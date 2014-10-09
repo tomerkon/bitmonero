@@ -29,7 +29,12 @@
 #include "common/dns_utils.h"
 #include <cstring>
 #include <sstream>
-#include <unbound.h>
+// check local first (in the event of static or in-source compilation of libunbound)
+#include "unbound.h"
+
+#include <stdlib.h>
+#include "include_base_utils.h"
+using namespace epee;
 
 namespace tools
 {
@@ -118,9 +123,11 @@ DNSResolver::~DNSResolver()
   }
 }
 
-std::vector<std::string> DNSResolver::get_ipv4(const std::string& url)
+std::vector<std::string> DNSResolver::get_ipv4(const std::string& url, bool& dnssec_available, bool& dnssec_valid)
 {
   std::vector<std::string> addresses;
+  dnssec_available = false;
+  dnssec_valid = false;
   char urlC[1000];  // waaaay too big, but just in case...
 
   strncpy(urlC, url.c_str(), 999);
@@ -148,9 +155,11 @@ std::vector<std::string> DNSResolver::get_ipv4(const std::string& url)
   return addresses;
 }
 
-std::vector<std::string> DNSResolver::get_ipv6(const std::string& url)
+std::vector<std::string> DNSResolver::get_ipv6(const std::string& url, bool& dnssec_available, bool& dnssec_valid)
 {
   std::vector<std::string> addresses;
+  dnssec_available = false;
+  dnssec_valid = false;
   char urlC[1000];  // waaaay too big, but just in case...
 
   strncpy(urlC, url.c_str(), 999);
@@ -178,9 +187,11 @@ std::vector<std::string> DNSResolver::get_ipv6(const std::string& url)
   return addresses;
 }
 
-std::vector<std::string> DNSResolver::get_txt_record(const std::string& url)
+std::vector<std::string> DNSResolver::get_txt_record(const std::string& url, bool& dnssec_available, bool& dnssec_valid)
 {
   std::vector<std::string> records;
+  dnssec_available = false;
+  dnssec_valid = false;
   char urlC[1000];  // waaaay too big, but just in case...
 
   strncpy(urlC, url.c_str(), 999);
@@ -200,7 +211,11 @@ std::vector<std::string> DNSResolver::get_txt_record(const std::string& url)
     {
       for (size_t i=0; result.ptr->data[i] != NULL; i++)
       {
-        records.push_back(result.ptr->data[i]);
+      	// plz fix this, but this does NOT work and spills over into parts of memory it shouldn't: records.push_back(result.ptr->data[i]);
+        char *restxt;
+        restxt = (char*) calloc(result.ptr->len[i]+1, 1);
+        memcpy(restxt, result.ptr->data[i]+1, result.ptr->len[i]-1);
+        records.push_back(restxt);
       }
     }
   }
