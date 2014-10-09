@@ -217,15 +217,6 @@ bool blockchain_storage::init(const std::string& config_folder, bool testnet)
   if(!m_blocks.back().bl.timestamp)
     timestamp_diff = time(NULL) - 1341378000;
   LOG_PRINT_GREEN("Blockchain initialized. last block: " << m_blocks.size() - 1 << ", " << epee::misc_utils::get_time_interval_string(timestamp_diff) << " time ago, current difficulty: " << get_difficulty_for_next_block(), LOG_LEVEL_0);
-/*
-  while (m_blocks.size() > 100) {
-    pop_block_from_blockchain();
-    if (!(m_blocks.size() % 100)) {
-        LOG_PRINT_GREEN("Blockchain size = " << m_blocks.size(), LOG_LEVEL_0);
-    }
-  }
-  LOG_PRINT_GREEN("Blockchain initialized. last block: " << m_blocks.size() - 1 << ", " << epee::misc_utils::get_time_interval_string(timestamp_diff) << " time ago, current difficulty: " << get_difficulty_for_next_block(), LOG_LEVEL_0);
-*/
   return true;
 }
 //------------------------------------------------------------------
@@ -366,32 +357,6 @@ bool blockchain_storage::store_blockchain_raw()
 bool blockchain_storage::deinit()
 {
   return store_blockchain();
-/*
-  m_is_blockchain_storing = true;
-  epee::misc_utils::auto_scope_leave_caller scope_exit_handler = epee::misc_utils::create_scope_leave_handler([&](){m_is_blockchain_storing=false;});
-
-  LOG_PRINT_L0("Storing blocks raw data...");
-  if(!tools::serialize_obj_to_file(m_blocks, "/home/ub/.bitmonero/m_blocks.dat")) {LOG_ERROR("Failed to save data file for m_blocks "); return false;}
-  LOG_PRINT_L0("Storing tx_pool raw data...");
-  if(!tools::serialize_obj_to_file(m_tx_pool, "/home/ub/.bitmonero/m_tx_pool.dat")) {LOG_ERROR("Failed to save data file for m_tx_pool "); return false;}
-  LOG_PRINT_L0("Storing blocks_index raw data...");
-  if(!tools::serialize_obj_to_file(m_blocks_index, "/home/ub/.bitmonero/m_blocks_index.dat")) {LOG_ERROR("Failed to save data file for m_blocks_index "); return false;}
-  LOG_PRINT_L0("Storing transactions raw data...");
-  if(!tools::serialize_obj_to_file(m_transactions, "/home/ub/.bitmonero/m_transactions.dat")) {LOG_ERROR("Failed to save data file for m_transactions "); return false;}
-  LOG_PRINT_L0("Storing spent_keys raw data...");
-  if(!tools::serialize_obj_to_file(m_spent_keys, "/home/ub/.bitmonero/m_spent_keys.dat")) {LOG_ERROR("Failed to save data file for m_spent_keys "); return false;}
-  LOG_PRINT_L0("Storing alternative_chains raw data...");
-  if(!tools::serialize_obj_to_file(m_alternative_chains, "/home/ub/.bitmonero/m_alternative_chains.dat")) {LOG_ERROR("Failed to save data file for m_alternative_chains "); return false;}
-  LOG_PRINT_L0("Storing invalid_blocks raw data...");
-  if(!tools::serialize_obj_to_file(m_invalid_blocks, "/home/ub/.bitmonero/m_invalid_blocks.dat")) {LOG_ERROR("Failed to save data file for m_invalid_blocks "); return false;}
-  LOG_PRINT_L0("Storing outputs raw data...");
-  if(!tools::serialize_obj_to_file(m_outputs, "/home/ub/.bitmonero/m_outputs.dat")) {LOG_ERROR("Failed to save data file for m_outputs "); return false;}
-//  if(!tools::serialize_obj_to_file(m_checkpoints, "/home/ub/.bitmonero/m_checkpoints.dat")) {LOG_ERROR("Failed to save data file for m_checkpoints "); return false;}
-//  if(!tools::serialize_obj_to_file(m_blocks, "/home/ub/.bitmonero/blocks.dat")) {LOG_ERROR("Failed to save data file for blocks "); return false;}
-
-  LOG_PRINT_L0("Blockchain stored OK.");
-  return true;
-*/
 }
 //------------------------------------------------------------------
 bool blockchain_storage::pop_block_from_blockchain()
@@ -1959,11 +1924,7 @@ bool blockchain_storage::add_new_block(const block& bl_, block_verification_cont
     //never relay alternative blocks
   }
 
-  bool x = handle_block_to_main_chain(bl, id, bvc);
-  if (m_blocks.size() == 100) {
-    store_blockchain();
-  }
-  return x;
+  return handle_block_to_main_chain(bl, id, bvc);
 }
 //------------------------------------------------------------------
 void blockchain_storage::check_against_checkpoints(checkpoints& points, bool enforce)
