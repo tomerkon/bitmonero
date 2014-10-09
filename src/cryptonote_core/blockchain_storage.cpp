@@ -82,14 +82,74 @@ uint64_t blockchain_storage::get_current_blockchain_height()
   return m_blocks.size();
 }
 //------------------------------------------------------------------
+bool blockchain_storage::load_from_raw_file(const std::string& raw_file_name)
+{
+//  log_space::get_set_log_detalisation_level(true, LOG_LEVEL_4);
+  boost::filesystem::path raw_file_path(raw_file_name);
+  boost::system::error_code ec;
+  if (!boost::filesystem::exists(raw_file_path, ec)) 
+  {
+      return false;
+  }
+  std::ifstream data_file;  
+  data_file.open( raw_file_name, std::ios_base::binary | std::ifstream::in);
+  boost::archive::binary_iarchive a(data_file);
+
+  if (data_file.fail())
+    return false;
+  LOG_PRINT_L0("Loading blockchain from raw file...");
+  int h = 0;
+  while (data_file.good()) 
+  {
+//    LOG_PRINT_L0("block height " << h);
+    if (h == 596) {
+      LOG_PRINT_L0("here ");
+    }
+    block b;
+    try {
+      a >> b;
+    } catch (const std::exception& e) {
+      break;
+    }
+    std::list<transaction> txs;
+    try {
+      a >> txs;
+    } catch (const std::exception& e) {} // catch when end-of-file reached.
+    int tx_num = 0;
+    BOOST_FOREACH(const transaction& tx, txs)
+    {
+      tx_num++;
+      if (tx_num == 1) {
+          continue; // coinbase transaction. no need to insert to tx_pool.
+      }
+      LOG_PRINT_L0("tx_num " << tx_num);
+      crypto::hash h = null_hash;
+      size_t blob_size = 0;
+      get_transaction_hash(tx, h, blob_size);
+      tx_verification_context tvc = AUTO_VAL_INIT(tvc);
+      bool r = m_tx_pool.add_tx(tx, tvc, true);
+      CHECK_AND_ASSERT_MES(r, false, "failed to add transaction to transaction pool");
+    }
+    block_verification_context bvc = boost::value_initialized<block_verification_context>();
+    add_new_block(b, bvc);
+    h++;
+    CHECK_AND_ASSERT_MES(!bvc.m_verifivation_failed && bvc.m_added_to_main_chain, false, "Failed to add block to blockchain, height = " << h);
+  }
+  LOG_PRINT_L0( h << "blocks read from raw file and added to blockchain");
+  return true;
+}
+
+//------------------------------------------------------------------
 bool blockchain_storage::init(const std::string& config_folder, bool testnet)
 {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
   m_config_folder = config_folder;
-  LOG_PRINT_L0("Loading blockchain...");
-  const std::string filename = m_config_folder + "/" CRYPTONOTE_BLOCKCHAINDATA_FILENAME;
-  if(tools::unserialize_obj_from_file(*this, filename))
-  {
+  const std::string rawfilename = m_config_folder + "/" + CRYPTONOTE_BLOCKCHAINDATA_RAW_FILENAME;
+  if (!load_from_raw_file(rawfilename)) {
+    LOG_PRINT_L0("Loading blockchain...");
+    const std::string filename = m_config_folder + "/" + CRYPTONOTE_BLOCKCHAINDATA_FILENAME;
+    if(tools::unserialize_obj_from_file(*this, filename))
+    {
 
       // checkpoints
       
@@ -108,9 +168,9 @@ bool blockchain_storage::init(const std::string& config_folder, bool testnet)
 	CHECK_AND_ASSERT_MES(m_checkpoints.is_alternative_block_allowed(m_blocks.size()-1,alt_block.second.height),false,"stored alternative block not allowed, blockchain.bin invalid");
       }
       #endif
-  }
-  else
-  {
+    }
+    else
+    {
       LOG_PRINT_L0("Can't load blockchain storage from file, generating genesis block.");
       block bl = boost::value_initialized<block>();
       block_verification_context bvc = boost::value_initialized<block_verification_context>();
@@ -124,6 +184,7 @@ bool blockchain_storage::init(const std::string& config_folder, bool testnet)
       }
       add_new_block(bl, bvc);
       CHECK_AND_ASSERT_MES(!bvc.m_verifivation_failed && bvc.m_added_to_main_chain, false, "Failed to add genesis block to blockchain");
+    }
   }
   if(!m_blocks.size())
   {
@@ -155,6 +216,15 @@ bool blockchain_storage::init(const std::string& config_folder, bool testnet)
   if(!m_blocks.back().bl.timestamp)
     timestamp_diff = time(NULL) - 1341378000;
   LOG_PRINT_GREEN("Blockchain initialized. last block: " << m_blocks.size() - 1 << ", " << epee::misc_utils::get_time_interval_string(timestamp_diff) << " time ago, current difficulty: " << get_difficulty_for_next_block(), LOG_LEVEL_0);
+/*
+  while (m_blocks.size() > 100) {
+    pop_block_from_blockchain();
+    if (!(m_blocks.size() % 100)) {
+        LOG_PRINT_GREEN("Blockchain size = " << m_blocks.size(), LOG_LEVEL_0);
+    }
+  }
+  LOG_PRINT_GREEN("Blockchain initialized. last block: " << m_blocks.size() - 1 << ", " << epee::misc_utils::get_time_interval_string(timestamp_diff) << " time ago, current difficulty: " << get_difficulty_for_next_block(), LOG_LEVEL_0);
+*/
   return true;
 }
 //------------------------------------------------------------------
@@ -207,10 +277,120 @@ bool blockchain_storage::store_blockchain()
   LOG_PRINT_L0("Blockchain stored OK.");
   return true;
 }
+
+
+bool blockchain_storage::open_raw_file_for_write()
+{
+    std::string file_path = "/home/ub/.bitmonero/raw1.dat";
+    m_raw_data_file = new std::ofstream();
+    m_raw_data_file->open(file_path , std::ios_base::binary | std::ios_base::out| std::ios::trunc);
+    if (m_raw_data_file->fail())
+      return false;
+    m_raw_archive = new boost::archive::binary_oarchive (*m_raw_data_file);
+    return true;
+}
+
+void blockchain_storage::write_block_to_raw_file(block& block)
+{
+    *m_raw_archive << block;
+    std::list<transaction> txs;
+
+    transaction coinbase_tx = block.miner_tx;
+    crypto::hash coinbase_tx_hash = get_transaction_hash(coinbase_tx);
+    transaction* cb_tx_full = get_tx(coinbase_tx_hash);
+    if (cb_tx_full != NULL) {
+      txs.push_back(*cb_tx_full);
+    }
+
+    BOOST_FOREACH(const auto& tx_id, block.tx_hashes)
+    {
+      auto it = m_transactions.find(tx_id);
+      if(it == m_transactions.end())
+      {
+        transaction tx;
+        if(m_tx_pool.get_transaction(tx_id, tx))
+          txs.push_back(tx);
+      }
+      else
+        txs.push_back(it->second.tx);
+    }
+    *m_raw_archive << txs;
+}
+
+bool blockchain_storage::blockchain_storage::close_raw_file()
+{
+    if (m_raw_data_file->fail())
+      return false;
+
+    m_raw_data_file->flush();
+	delete[] m_raw_archive;
+	delete[] m_raw_data_file;
+    return true;
+}
+
+//------------------------------------------------------------------
+bool blockchain_storage::store_blockchain_raw()
+{
+  m_is_blockchain_storing = true;
+  epee::misc_utils::auto_scope_leave_caller scope_exit_handler = epee::misc_utils::create_scope_leave_handler([&](){m_is_blockchain_storing=false;});
+
+  LOG_PRINT_L0("Storing blocks raw data...");
+  if (!open_raw_file_for_write()) {
+    LOG_PRINT_L0("failed to open raw file for write");
+    return false;
+  }
+  for (size_t height=0; height < m_blocks.size(); ++height) 
+  {
+	write_block_to_raw_file(m_blocks[height].bl);
+  }
+/*  printf("total #tx saved: %d\n", num_saved_txs);
+  printf("total #tx exist: %lu\n", m_transactions.size());
+
+  LOG_PRINT_L0("Blockchain stored OK.");
+  size_t last_h = m_blocks.size() - 1;
+  printf("last block height: %lu\n", last_h);
+  transaction coinbase_tx = m_blocks[last_h].bl.miner_tx;
+  crypto::hash coinbase_tx_hash = get_transaction_hash(coinbase_tx);
+  auto it = m_transactions.find(coinbase_tx_hash);
+  if (it == m_transactions.end()) {
+    printf("m_transactions does not cointain coinbase_tx\n");
+  } else {
+    printf("m_transactions cointains coinbase_tx\n");
+    transaction* tx = &it->second.tx;
+  }
+*/
+  return true;
+}
 //------------------------------------------------------------------
 bool blockchain_storage::deinit()
 {
   return store_blockchain();
+/*
+  m_is_blockchain_storing = true;
+  epee::misc_utils::auto_scope_leave_caller scope_exit_handler = epee::misc_utils::create_scope_leave_handler([&](){m_is_blockchain_storing=false;});
+
+  LOG_PRINT_L0("Storing blocks raw data...");
+  if(!tools::serialize_obj_to_file(m_blocks, "/home/ub/.bitmonero/m_blocks.dat")) {LOG_ERROR("Failed to save data file for m_blocks "); return false;}
+  LOG_PRINT_L0("Storing tx_pool raw data...");
+  if(!tools::serialize_obj_to_file(m_tx_pool, "/home/ub/.bitmonero/m_tx_pool.dat")) {LOG_ERROR("Failed to save data file for m_tx_pool "); return false;}
+  LOG_PRINT_L0("Storing blocks_index raw data...");
+  if(!tools::serialize_obj_to_file(m_blocks_index, "/home/ub/.bitmonero/m_blocks_index.dat")) {LOG_ERROR("Failed to save data file for m_blocks_index "); return false;}
+  LOG_PRINT_L0("Storing transactions raw data...");
+  if(!tools::serialize_obj_to_file(m_transactions, "/home/ub/.bitmonero/m_transactions.dat")) {LOG_ERROR("Failed to save data file for m_transactions "); return false;}
+  LOG_PRINT_L0("Storing spent_keys raw data...");
+  if(!tools::serialize_obj_to_file(m_spent_keys, "/home/ub/.bitmonero/m_spent_keys.dat")) {LOG_ERROR("Failed to save data file for m_spent_keys "); return false;}
+  LOG_PRINT_L0("Storing alternative_chains raw data...");
+  if(!tools::serialize_obj_to_file(m_alternative_chains, "/home/ub/.bitmonero/m_alternative_chains.dat")) {LOG_ERROR("Failed to save data file for m_alternative_chains "); return false;}
+  LOG_PRINT_L0("Storing invalid_blocks raw data...");
+  if(!tools::serialize_obj_to_file(m_invalid_blocks, "/home/ub/.bitmonero/m_invalid_blocks.dat")) {LOG_ERROR("Failed to save data file for m_invalid_blocks "); return false;}
+  LOG_PRINT_L0("Storing outputs raw data...");
+  if(!tools::serialize_obj_to_file(m_outputs, "/home/ub/.bitmonero/m_outputs.dat")) {LOG_ERROR("Failed to save data file for m_outputs "); return false;}
+//  if(!tools::serialize_obj_to_file(m_checkpoints, "/home/ub/.bitmonero/m_checkpoints.dat")) {LOG_ERROR("Failed to save data file for m_checkpoints "); return false;}
+//  if(!tools::serialize_obj_to_file(m_blocks, "/home/ub/.bitmonero/blocks.dat")) {LOG_ERROR("Failed to save data file for blocks "); return false;}
+
+  LOG_PRINT_L0("Blockchain stored OK.");
+  return true;
+*/
 }
 //------------------------------------------------------------------
 bool blockchain_storage::pop_block_from_blockchain()
@@ -1771,5 +1951,9 @@ bool blockchain_storage::add_new_block(const block& bl_, block_verification_cont
     //never relay alternative blocks
   }
 
-  return handle_block_to_main_chain(bl, id, bvc);
+  bool x = handle_block_to_main_chain(bl, id, bvc);
+  if (m_blocks.size() == 100) {
+    store_blockchain();
+  }
+  return x;
 }
