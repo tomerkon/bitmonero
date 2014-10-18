@@ -32,7 +32,9 @@
 #include <cstdio>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
-
+#include <boost/iostreams/stream_buffer.hpp>
+#include <boost/iostreams/stream.hpp>
+#include <boost/iostreams/device/back_inserter.hpp>
 #include "include_base_utils.h"
 #include "cryptonote_basic_impl.h"
 #include "blockchain_storage.h"
@@ -51,6 +53,13 @@
 //#include "serialization/json_archive.h"
 
 using namespace cryptonote;
+
+#define NUM_BLOCKS_PER_CHUNK 1
+#define BUFFER_SIZE 100000
+#define STR_LENGTH_OF_INT 9
+#define STR_FORMAT_OF_INT "%09d"
+
+static char largebuffer[BUFFER_SIZE];
 
 DISABLE_VS_WARNINGS(4267)
 
@@ -94,47 +103,74 @@ bool blockchain_storage::load_from_raw_file(const std::string& raw_file_name)
   }
   std::ifstream data_file;  
   data_file.open( raw_file_name, std::ios_base::binary | std::ifstream::in);
-  boost::archive::binary_iarchive a(data_file);
-
+  int h = 0;
   if (data_file.fail())
     return false;
   LOG_PRINT_L0("Loading blockchain from raw file...");
-  int h = 0;
-  while (data_file.good()) 
+  char buffer1[STR_LENGTH_OF_INT + 1];
+  while (true) 
   {
-//    LOG_PRINT_L0("block height " << h);
-    if (h == 596) {
-      LOG_PRINT_L0("here ");
+    int chunkSize;
+    data_file.read (buffer1, STR_LENGTH_OF_INT);
+    if (!data_file) {
+      LOG_PRINT_L0("end of rawfile reached");
+      return true;
     }
-    block b;
-    try {
-      a >> b;
-    } catch (const std::exception& e) {
-      break;
+    buffer1[STR_LENGTH_OF_INT] = '\0';
+    chunkSize = atoi(buffer1);
+    data_file.read (largebuffer, chunkSize);
+    if (!data_file) {
+      LOG_PRINT_L0("end of rawfile reached");
+      return true;
     }
-    std::list<transaction> txs;
-    try {
-      a >> txs;
-    } catch (const std::exception& e) {} // catch when end-of-file reached.
-    int tx_num = 0;
-    BOOST_FOREACH(const transaction& tx, txs)
+//  LOG_PRINT_L0("read "<< chunkSize << " bytes into buffer");
+    boost::iostreams::basic_array_source<char> device(largebuffer, chunkSize);
+    boost::iostreams::stream<boost::iostreams::basic_array_source<char> > s(device);
+    boost::archive::binary_iarchive a(s);
+
+    for (int chunk_ind = 0; chunk_ind < NUM_BLOCKS_PER_CHUNK; chunk_ind ++)
     {
-      tx_num++;
-      if (tx_num == 1) {
-          continue; // coinbase transaction. no need to insert to tx_pool.
+      if (h % 10000 == 0) {
+        LOG_PRINT_L0("loading block height " << h);
+      } else {
+        LOG_PRINT_L1("loading block height " << h);
       }
-      LOG_PRINT_L0("tx_num " << tx_num);
-      crypto::hash h = null_hash;
-      size_t blob_size = 0;
-      get_transaction_hash(tx, h, blob_size);
-      tx_verification_context tvc = AUTO_VAL_INIT(tvc);
-      bool r = m_tx_pool.add_tx(tx, tvc, true);
-      CHECK_AND_ASSERT_MES(r, false, "failed to add transaction to transaction pool");
+      block b;
+      try {
+        a >> b;
+      } catch (const std::exception& e) {
+        break;
+      }
+      int num_txs;
+      try {
+        a >> num_txs;
+      } catch (const std::exception& e) {} // catch when end-of-file reached.
+      for(int tx_num = 1; tx_num <= num_txs; tx_num++)
+      {
+        LOG_PRINT_L1("tx_num " << tx_num);
+        transaction tx;
+        try {
+		  a >> tx;
+ 	    } catch (const std::exception& e) {} // catch when end-of-file reached.
+        if (tx_num == 1) {
+            continue; // coinbase transaction. no need to insert to tx_pool.
+        }
+        crypto::hash h = null_hash;
+        size_t blob_size = 0;
+        get_transaction_hash(tx, h, blob_size);
+        tx_verification_context tvc = AUTO_VAL_INIT(tvc);
+        bool r = m_tx_pool.add_tx(tx, tvc, true);
+        CHECK_AND_ASSERT_MES(r, false, "failed to add transaction to transaction pool");
+      }
+      block_verification_context bvc = boost::value_initialized<block_verification_context>();
+      add_new_block(b, bvc);
+      if (bvc.m_verifivation_failed || ! bvc.m_added_to_main_chain) {
+  	    LOG_PRINT_L0("Failed to add block to blockchain, height = " << h);
+  	    LOG_PRINT_L0("skipping rest of raw file");
+  		return true;
+      }
+      h++;
     }
-    block_verification_context bvc = boost::value_initialized<block_verification_context>();
-    add_new_block(b, bvc);
-    h++;
-    CHECK_AND_ASSERT_MES(!bvc.m_verifivation_failed && bvc.m_added_to_main_chain, false, "Failed to add block to blockchain, height = " << h);
   }
   LOG_PRINT_L0( h << "blocks read from raw file and added to blockchain");
   return true;
@@ -237,6 +273,7 @@ bool blockchain_storage::store_genesis_block(bool testnet) {
   CHECK_AND_ASSERT_MES(!bvc.m_verifivation_failed, false, "Failed to add genesis block to blockchain");
   return true;
 }
+
 //------------------------------------------------------------------
 bool blockchain_storage::store_blockchain()
 {
@@ -273,20 +310,67 @@ bool blockchain_storage::store_blockchain()
 
 bool blockchain_storage::open_raw_file_for_write()
 {
-    std::string file_path = "/home/ub/.bitmonero/raw1.dat";
+    std::string file_path = "/home/ub/.bitmonero/";
+	file_path += CRYPTONOTE_BLOCKCHAINDATA_RAW_FILENAME;
     m_raw_data_file = new std::ofstream();
     m_raw_data_file->open(file_path , std::ios_base::binary | std::ios_base::out| std::ios::trunc);
     if (m_raw_data_file->fail())
       return false;
-    m_raw_archive = new boost::archive::binary_oarchive (*m_raw_data_file);
+
+	m_output_stream = new boost::iostreams::stream<boost::iostreams::back_insert_device<buffer_type> > (m_buffer);
+    m_raw_archive = new boost::archive::binary_oarchive (*m_output_stream);
+    if (m_raw_archive == NULL)
+      return false;
+
+    m_bufferpos = 0;
+
     return true;
+}
+
+void blockchain_storage::flush_chunk()
+{
+  m_output_stream -> flush();
+  char buffer[STR_LENGTH_OF_INT + 1];
+  sprintf(buffer, STR_FORMAT_OF_INT, (int) m_buffer.size());
+  m_raw_data_file->write (buffer, STR_LENGTH_OF_INT);
+  printf("chunk lengh = %s\n", buffer);
+  std::copy(m_buffer.begin(), m_buffer.end(), std::ostreambuf_iterator<char>(*m_raw_data_file));
+  m_raw_data_file->flush();
+
+  m_buffer.clear();
+  m_bufferpos = 0;
+  delete m_raw_archive;
+  delete m_output_stream;
+  m_output_stream = new boost::iostreams::stream<boost::iostreams::back_insert_device<buffer_type> > (m_buffer);
+  m_raw_archive = new boost::archive::binary_oarchive (*m_output_stream);
+}
+
+
+void blockchain_storage::serialize_block_to_text_buffer(const block& block)
+{
+//todo: implement
+    *m_raw_archive << block;
+}
+
+void blockchain_storage::buffer_serialize_tx(const transaction& tx)
+{
+//todo: implement
+    *m_raw_archive << tx;
+}
+
+void blockchain_storage::buffer_write_num_txs(const std::list<transaction> txs)
+{
+//todo: implement
+	int n = txs.size();
+    *m_raw_archive << n;
 }
 
 void blockchain_storage::write_block_to_raw_file(block& block)
 {
-    *m_raw_archive << block;
+    serialize_block_to_text_buffer(block);
     std::list<transaction> txs;
 
+    // put coinbase transaction first
     transaction coinbase_tx = block.miner_tx;
     crypto::hash coinbase_tx_hash = get_transaction_hash(coinbase_tx);
     transaction* cb_tx_full = get_tx(coinbase_tx_hash);
@@ -294,6 +378,7 @@ void blockchain_storage::write_block_to_raw_file(block& block)
       txs.push_back(*cb_tx_full);
     }
 
+    // now add all regular transactions
     BOOST_FOREACH(const auto& tx_id, block.tx_hashes)
     {
       auto it = m_transactions.find(tx_id);
@@ -306,7 +391,13 @@ void blockchain_storage::write_block_to_raw_file(block& block)
       else
         txs.push_back(it->second.tx);
     }
-    *m_raw_archive << txs;
+
+    // serialize all txs to the persistant storage
+	buffer_write_num_txs(txs);
+    BOOST_FOREACH(const auto& tx, txs)
+    {
+      buffer_serialize_tx(tx);
+    }
 }
 
 bool blockchain_storage::blockchain_storage::close_raw_file()
@@ -317,6 +408,8 @@ bool blockchain_storage::blockchain_storage::close_raw_file()
     m_raw_data_file->flush();
 	delete[] m_raw_archive;
 	delete[] m_raw_data_file;
+	delete[] m_output_stream;
+//  delete[] m_buffer;
     return true;
 }
 
@@ -331,26 +424,17 @@ bool blockchain_storage::store_blockchain_raw()
     LOG_PRINT_L0("failed to open raw file for write");
     return false;
   }
-  for (size_t height=0; height < m_blocks.size(); ++height) 
+  size_t height;
+  for (height=0; height < m_blocks.size(); ++height) 
   {
 	write_block_to_raw_file(m_blocks[height].bl);
+    if (height % NUM_BLOCKS_PER_CHUNK == 0) {
+      flush_chunk();
+    }
   }
-/*  printf("total #tx saved: %d\n", num_saved_txs);
-  printf("total #tx exist: %lu\n", m_transactions.size());
-
-  LOG_PRINT_L0("Blockchain stored OK.");
-  size_t last_h = m_blocks.size() - 1;
-  printf("last block height: %lu\n", last_h);
-  transaction coinbase_tx = m_blocks[last_h].bl.miner_tx;
-  crypto::hash coinbase_tx_hash = get_transaction_hash(coinbase_tx);
-  auto it = m_transactions.find(coinbase_tx_hash);
-  if (it == m_transactions.end()) {
-    printf("m_transactions does not cointain coinbase_tx\n");
-  } else {
-    printf("m_transactions cointains coinbase_tx\n");
-    transaction* tx = &it->second.tx;
+  if (height % NUM_BLOCKS_PER_CHUNK != 0) {
+    flush_chunk();
   }
-*/
   return true;
 }
 //------------------------------------------------------------------

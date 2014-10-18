@@ -38,6 +38,9 @@
 #include <boost/multi_index/member.hpp>
 #include <boost/foreach.hpp>
 #include <boost/archive/binary_oarchive.hpp>
+#include <boost/iostreams/stream_buffer.hpp>
+#include <boost/iostreams/stream.hpp>
+#include <boost/iostreams/device/back_inserter.hpp>
 #include <atomic>
 
 #include "syncobj.h"
@@ -252,11 +255,19 @@ namespace cryptonote
     bool store_genesis_block(bool testnet);
     bool load_from_raw_file(const std::string& raw_file_name);
 protected:
+    typedef std::vector<char> buffer_type;
     std::ofstream * m_raw_data_file;
 	boost::archive::binary_oarchive * m_raw_archive;
+    buffer_type m_buffer;
+    int m_bufferpos;
+    boost::iostreams::stream<boost::iostreams::back_insert_device<buffer_type> > * m_output_stream;
 	bool open_raw_file_for_write();
     bool close_raw_file();
     void write_block_to_raw_file(block& block);
+	void serialize_block_to_text_buffer(const block& block);
+	void buffer_serialize_tx(const transaction& tx);
+	void buffer_write_num_txs(const std::list<transaction> txs);
+	void flush_chunk();
   };
 
 
