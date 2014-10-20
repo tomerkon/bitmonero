@@ -23,18 +23,18 @@ bool bootfileloader::load_from_raw_file(void* bcs, const std::string& raw_file_n
 //  log_space::get_set_log_detalisation_level(true, LOG_LEVEL_4);
   boost::filesystem::path raw_file_path(raw_file_name);
   boost::system::error_code ec;
-  if (!boost::filesystem::exists(raw_file_path, ec)) 
+  if (!boost::filesystem::exists(raw_file_path, ec))
   {
       return false;
   }
-  std::ifstream data_file;  
+  std::ifstream data_file;
   data_file.open( raw_file_name, std::ios_base::binary | std::ifstream::in);
   int h = 0;
   if (data_file.fail())
     return false;
   LOG_PRINT_L0("Loading blockchain from raw file...");
   char buffer1[STR_LENGTH_OF_INT + 1];
-  while (true) 
+  while (true)
   {
     int chunkSize;
     data_file.read (buffer1, STR_LENGTH_OF_INT);
@@ -77,7 +77,7 @@ bool bootfileloader::load_from_raw_file(void* bcs, const std::string& raw_file_n
         transaction tx;
         try {
 		  a >> tx;
- 	    } catch (const std::exception& e) {} // catch when end-of-file reached.
+	    } catch (const std::exception& e) {} // catch when end-of-file reached.
         if (tx_num == 1) {
             continue; // coinbase transaction. no need to insert to tx_pool.
         }
@@ -87,8 +87,8 @@ bool bootfileloader::load_from_raw_file(void* bcs, const std::string& raw_file_n
         tx_verification_context tvc = AUTO_VAL_INIT(tvc);
         bool r = true;
 ///        r = m_tx_pool.add_tx(tx, tvc, true);
-        if (!r) 
-        { 
+        if (!r)
+        {
           LOG_PRINT_RED_L0("failed to add transaction to transaction pool");
           return false;
         }
@@ -98,9 +98,9 @@ bool bootfileloader::load_from_raw_file(void* bcs, const std::string& raw_file_n
       bcs1 -> add_new_block(b, bvc);
 
       if (bvc.m_verifivation_failed || ! bvc.m_added_to_main_chain) {
-  	    LOG_PRINT_L0("Failed to add block to blockchain, height = " << h);
-  	    LOG_PRINT_L0("skipping rest of raw file");
-  		return true;
+	    LOG_PRINT_L0("Failed to add block to blockchain, height = " << h);
+	    LOG_PRINT_L0("skipping rest of raw file");
+		return true;
       }
       h++;
     }

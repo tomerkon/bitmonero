@@ -77,7 +77,7 @@ void bootfilesaver::flush_chunk()
   printf("chunk lengh = %s\n", buffer);
   std::copy(m_buffer.begin(), m_buffer.end(), std::ostreambuf_iterator<char>(*m_raw_data_file));
   m_raw_data_file->flush();
- 
+
   m_buffer.clear();
   delete m_raw_archive;
   delete m_output_stream;
@@ -164,7 +164,7 @@ bool bootfilesaver::store_blockchain_raw(blockchain_storage* _blockchain_storage
   }
   size_t height;
   block b;
-  for (height=0; height < m_blockchain_storage -> get_current_blockchain_height(); ++height) 
+  for (height=0; height < m_blockchain_storage -> get_current_blockchain_height(); ++height)
   {
     crypto::hash hash = m_blockchain_storage -> get_block_id_by_height(height);
     m_blockchain_storage -> get_block_by_hash(hash, b);
