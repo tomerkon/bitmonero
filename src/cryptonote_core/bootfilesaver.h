@@ -1,3 +1,7 @@
+#include <boost/archive/binary_oarchive.hpp>
+#include <boost/iostreams/stream_buffer.hpp>
+#include <boost/iostreams/stream.hpp>
+#include <boost/iostreams/device/back_inserter.hpp>
 #include "cryptonote_basic.h"
 #include "blockchain_storage.h"
 
