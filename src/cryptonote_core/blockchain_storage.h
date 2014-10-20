@@ -248,7 +248,6 @@ namespace cryptonote
     bool complete_timestamps_vector(uint64_t start_height, std::vector<uint64_t>& timestamps);
     bool update_next_comulative_size_limit();
     bool store_genesis_block(bool testnet);
-    bool load_from_raw_file(const std::string& raw_file_name);
   };
 
 
