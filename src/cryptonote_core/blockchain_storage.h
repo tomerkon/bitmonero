@@ -37,10 +37,6 @@
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/member.hpp>
 #include <boost/foreach.hpp>
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/iostreams/stream_buffer.hpp>
-#include <boost/iostreams/stream.hpp>
-#include <boost/iostreams/device/back_inserter.hpp>
 #include <atomic>
 
 #include "syncobj.h"

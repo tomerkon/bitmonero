@@ -46,11 +46,9 @@
 #include "crypto/hash.h"
 #include "cryptonote_core/checkpoints_create.h"
 #include "bootfileloader.h"
-
 //#include "serialization/json_archive.h"
 
 using namespace cryptonote;
-
 
 DISABLE_VS_WARNINGS(4267)
 
@@ -82,7 +80,6 @@ uint64_t blockchain_storage::get_current_blockchain_height()
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
   return m_blocks.size();
 }
-//------------------------------------------------------------------
 //------------------------------------------------------------------
 bool blockchain_storage::init(const std::string& config_folder, bool testnet)
 {
@@ -180,7 +177,6 @@ bool blockchain_storage::store_genesis_block(bool testnet) {
   CHECK_AND_ASSERT_MES(!bvc.m_verifivation_failed, false, "Failed to add genesis block to blockchain");
   return true;
 }
-
 //------------------------------------------------------------------
 bool blockchain_storage::store_blockchain()
 {
@@ -213,8 +209,6 @@ bool blockchain_storage::store_blockchain()
   LOG_PRINT_L0("Blockchain stored OK.");
   return true;
 }
-
-
 //------------------------------------------------------------------
 bool blockchain_storage::deinit()
 {
