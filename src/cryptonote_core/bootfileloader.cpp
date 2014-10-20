@@ -1,12 +1,12 @@
 #include <boost/filesystem.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/archive/binary_iarchive.hpp>
+#include "blockchain_storage.h"
 #include "bootfileloader.h"
 #include "include_base_utils.h"
 #include "cryptonote_basic.h"
 #include "cryptonote_format_utils.h"
 #include "verification_context.h"
-#include "blockchain_storage.h"
 #include "cryptonote_boost_serialization.h"
 
 #define NUM_BLOCKS_PER_CHUNK 1
@@ -17,7 +17,7 @@
 static char largebuffer[BUFFER_SIZE];
 using namespace cryptonote;
 
-bool bootfileloader::load_from_raw_file(void* bcs, const std::string& raw_file_name)
+bool bootfileloader::load_from_raw_file(blockchain_storage* bcs, const std::string& raw_file_name)
 {
 
 //  log_space::get_set_log_detalisation_level(true, LOG_LEVEL_4);
@@ -94,10 +94,14 @@ bool bootfileloader::load_from_raw_file(void* bcs, const std::string& raw_file_n
         }
       }
       block_verification_context bvc = boost::value_initialized<block_verification_context>();
-      blockchain_storage* bcs1 = (blockchain_storage*) bcs;
-      bcs1 -> add_new_block(b, bvc);
+      bcs -> add_new_block(b, bvc);
 
-      if (bvc.m_verifivation_failed || ! bvc.m_added_to_main_chain) {
+      if (bvc.m_verifivation_failed) {
+	    LOG_PRINT_L0("Failed to add block to blockchain, verification failed, height = " << h);
+	    LOG_PRINT_L0("skipping rest of raw file");
+		return true;
+      }
+      if ( ! bvc.m_added_to_main_chain) {
 	    LOG_PRINT_L0("Failed to add block to blockchain, height = " << h);
 	    LOG_PRINT_L0("skipping rest of raw file");
 		return true;
