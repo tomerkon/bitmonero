@@ -17,10 +17,8 @@
 static char largebuffer[BUFFER_SIZE];
 using namespace cryptonote;
 
-bool bootfileloader::load_from_raw_file(blockchain_storage* bcs, const std::string& raw_file_name)
+bool bootfileloader::load_from_raw_file(blockchain_storage* bcs, tx_memory_pool* _tx_pool, const std::string& raw_file_name)
 {
-
-//  log_space::get_set_log_detalisation_level(true, LOG_LEVEL_4);
   boost::filesystem::path raw_file_path(raw_file_name);
   boost::system::error_code ec;
   if (!boost::filesystem::exists(raw_file_path, ec))
@@ -86,7 +84,7 @@ bool bootfileloader::load_from_raw_file(blockchain_storage* bcs, const std::stri
         get_transaction_hash(tx, h, blob_size);
         tx_verification_context tvc = AUTO_VAL_INIT(tvc);
         bool r = true;
-///        r = m_tx_pool.add_tx(tx, tvc, true);
+        r = _tx_pool -> add_tx(tx, tvc, true);
         if (!r)
         {
           LOG_PRINT_RED_L0("failed to add transaction to transaction pool");

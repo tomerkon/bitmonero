@@ -86,7 +86,7 @@ bool blockchain_storage::init(const std::string& config_folder, bool testnet)
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
   m_config_folder = config_folder;
   const std::string rawfilename = m_config_folder + "/" + CRYPTONOTE_BLOCKCHAINDATA_RAW_FILENAME;
-  if (!bootfileloader::load_from_raw_file(this, rawfilename)) {
+  if (!bootfileloader::load_from_raw_file(this, &m_tx_pool, rawfilename)) {
     LOG_PRINT_L0("Loading blockchain...");
     const std::string filename = m_config_folder + "/" + CRYPTONOTE_BLOCKCHAINDATA_FILENAME;
     if(tools::unserialize_obj_from_file(*this, filename))
