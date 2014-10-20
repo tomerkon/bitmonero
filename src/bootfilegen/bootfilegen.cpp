@@ -11,6 +11,7 @@ using namespace epee;
 #include "cryptonote_core/blockchain_storage.h"
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
 #include "version.h"
+#include "cryptonote_core/bootfilesaver.h"
 #include <iostream>
 #include <exception>
 #include <string>
@@ -81,14 +82,15 @@ int main(int argc, char* argv[])
   auto data_dir_arg = testnet_mode ? command_line::arg_testnet_data_dir : command_line::arg_data_dir;
   m_config_folder = command_line::get_arg(vm, data_dir_arg);
   printf("config folder is %s\n", m_config_folder.c_str());
-  blockchain_storage* m_blockchain_storage = NULL;
-  tx_memory_pool m_mempool(*m_blockchain_storage);
-  m_blockchain_storage = new blockchain_storage(m_mempool);
-  r = m_blockchain_storage->init(m_config_folder, testnet_mode);
+  blockchain_storage* _blockchain_storage = NULL;
+  tx_memory_pool m_mempool(*_blockchain_storage);
+  _blockchain_storage = new blockchain_storage(m_mempool);
+  r = _blockchain_storage->init(m_config_folder, testnet_mode);
   CHECK_AND_ASSERT_MES(r, false, "Failed to initialize blockchain storage");
   LOG_PRINT_L0("CoreStorage initialized OK");
   LOG_PRINT_L0("saving blockchain raw data...");
-  r = m_blockchain_storage->store_blockchain_raw();
+  bootfilesaver bfs;
+  r = bfs.store_blockchain_raw(_blockchain_storage, &m_mempool);
   CHECK_AND_ASSERT_MES(r, false, "Failed to save blockchain raw storage");
   LOG_PRINT_L0("CoreStorage raw data saved OK");
 }

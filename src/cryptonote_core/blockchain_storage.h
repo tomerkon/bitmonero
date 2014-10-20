@@ -131,7 +131,6 @@ namespace cryptonote
     bool get_backward_blocks_sizes(size_t from_height, std::vector<size_t>& sz, size_t count);
     bool get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<uint64_t>& indexs);
     bool store_blockchain();
-    bool store_blockchain_raw();
     bool check_tx_input(const txin_to_key& txin, const crypto::hash& tx_prefix_hash, const std::vector<crypto::signature>& sig, uint64_t* pmax_related_block_height = NULL);
     bool check_tx_inputs(const transaction& tx, const crypto::hash& tx_prefix_hash, uint64_t* pmax_used_block_height = NULL);
     bool check_tx_inputs(const transaction& tx, uint64_t* pmax_used_block_height = NULL);
@@ -254,20 +253,6 @@ namespace cryptonote
     bool update_next_comulative_size_limit();
     bool store_genesis_block(bool testnet);
     bool load_from_raw_file(const std::string& raw_file_name);
-protected:
-    typedef std::vector<char> buffer_type;
-    std::ofstream * m_raw_data_file;
-	boost::archive::binary_oarchive * m_raw_archive;
-    buffer_type m_buffer;
-    int m_bufferpos;
-    boost::iostreams::stream<boost::iostreams::back_insert_device<buffer_type> > * m_output_stream;
-	bool open_raw_file_for_write();
-    bool close_raw_file();
-    void write_block_to_raw_file(block& block);
-	void serialize_block_to_text_buffer(const block& block);
-	void buffer_serialize_tx(const transaction& tx);
-	void buffer_write_num_txs(const std::list<transaction> txs);
-	void flush_chunk();
   };
 
 
