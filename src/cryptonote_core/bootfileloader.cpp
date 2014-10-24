@@ -32,8 +32,13 @@ bool bootfileloader::load_from_raw_file(blockchain_storage* bcs, tx_memory_pool*
     return false;
   LOG_PRINT_L0("Loading blockchain from raw file...");
   char buffer1[STR_LENGTH_OF_INT + 1];
+  block b;
+  transaction tx;
   while (true)
   {
+    if (h > 186742) {
+      printf("here\n");
+    }
     int chunkSize;
     data_file.read (buffer1, STR_LENGTH_OF_INT);
     if (!data_file) {
@@ -54,12 +59,11 @@ bool bootfileloader::load_from_raw_file(blockchain_storage* bcs, tx_memory_pool*
 
     for (int chunk_ind = 0; chunk_ind < NUM_BLOCKS_PER_CHUNK; chunk_ind ++)
     {
-      if (h % 10000 == 0) {
+      if (h % 10000 == 0 || h > 186740) {
         LOG_PRINT_L0("loading block height " << h);
       } else {
         LOG_PRINT_L1("loading block height " << h);
       }
-      block b;
       try {
         a >> b;
       } catch (const std::exception& e) {
@@ -72,7 +76,6 @@ bool bootfileloader::load_from_raw_file(blockchain_storage* bcs, tx_memory_pool*
       for(int tx_num = 1; tx_num <= num_txs; tx_num++)
       {
         LOG_PRINT_L1("tx_num " << tx_num);
-        transaction tx;
         try {
 		  a >> tx;
 	    } catch (const std::exception& e) {} // catch when end-of-file reached.
