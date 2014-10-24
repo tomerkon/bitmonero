@@ -20,7 +20,8 @@
 #define STR_LENGTH_OF_INT 9
 #define STR_FORMAT_OF_INT "%09d"
 static char largebuffer[BUFFER_SIZE];
-
+static int max_chunk = 0;
+static size_t height;
 
 bool bootfilesaver::open_raw_file_for_write()
 {
@@ -72,11 +73,22 @@ void bootfilesaver::flush_chunk()
 {
   m_output_stream -> flush();
   char buffer[STR_LENGTH_OF_INT + 1];
-  sprintf(buffer, STR_FORMAT_OF_INT, (int) m_buffer.size());
+  int chunksize = (int) m_buffer.size();
+  sprintf(buffer, STR_FORMAT_OF_INT, chunksize);
   m_raw_data_file->write (buffer, STR_LENGTH_OF_INT);
-  printf("chunk lengh = %s\n", buffer);
+//  printf("chunk lengh = %d\n", chunksize);
+  if (max_chunk < chunksize)
+  {
+    max_chunk = chunksize;
+  }
+  long pos_before = m_raw_data_file->tellp();
   std::copy(m_buffer.begin(), m_buffer.end(), std::ostreambuf_iterator<char>(*m_raw_data_file));
   m_raw_data_file->flush();
+  long pos_after = m_raw_data_file->tellp();
+  long num_chars_written = pos_after - pos_before;
+  if ((int) num_chars_written != chunksize) {
+    LOG_PRINT_L0("INTERNAL ERROR: num chars wrote NEQ buffer size. height = " << height);
+  }
 
   m_buffer.clear();
   delete m_raw_archive;
@@ -162,10 +174,10 @@ bool bootfilesaver::store_blockchain_raw(blockchain_storage* _blockchain_storage
     LOG_PRINT_L0("failed to open raw file for write");
     return false;
   }
-  size_t height;
   block b;
   for (height=0; height < m_blockchain_storage -> get_current_blockchain_height(); ++height)
   {
+//    if (height != 186742)  continue;// size = 87010
     crypto::hash hash = m_blockchain_storage -> get_block_id_by_height(height);
     m_blockchain_storage -> get_block_by_hash(hash, b);
     write_block_to_raw_file(b);
@@ -176,6 +188,8 @@ bool bootfilesaver::store_blockchain_raw(blockchain_storage* _blockchain_storage
   if (height % NUM_BLOCKS_PER_CHUNK != 0) {
     flush_chunk();
   }
+
+  LOG_PRINT_L0("longest chunk was " << max_chunk << " bytes");
 
   return true;
 }
