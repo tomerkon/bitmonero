@@ -116,6 +116,7 @@ namespace cryptonote
   {
     auto data_dir_arg = testnet ? command_line::arg_testnet_data_dir : command_line::arg_data_dir;
     m_config_folder = command_line::get_arg(vm, data_dir_arg);
+    m_additive_boot = command_line::get_arg(vm, command_line::arg_additive_boot);
     return true;
   }
   //-----------------------------------------------------------------------------------------------
@@ -154,14 +155,14 @@ namespace cryptonote
     return m_blockchain_storage.get_alternative_blocks_count();
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::init(const boost::program_options::variables_map& vm, bool testnet)
+  bool core::init(const boost::program_options::variables_map& vm, bool testnet, bool additive_boot)
   {
     bool r = handle_command_line(vm, testnet);
 
     r = m_mempool.init(m_config_folder);
     CHECK_AND_ASSERT_MES(r, false, "Failed to initialize memory pool");
 
-    r = m_blockchain_storage.init(m_config_folder, testnet);
+    r = m_blockchain_storage.init(m_config_folder, testnet, additive_boot);
     CHECK_AND_ASSERT_MES(r, false, "Failed to initialize blockchain storage");
 
     // load json & DNS checkpoints, and verify them

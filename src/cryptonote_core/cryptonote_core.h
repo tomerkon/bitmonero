@@ -72,7 +72,7 @@ namespace cryptonote
 
      miner& get_miner(){return m_miner;}
      static void init_options(boost::program_options::options_description& desc);
-     bool init(const boost::program_options::variables_map& vm, bool testnet);
+     bool init(const boost::program_options::variables_map& vm, bool testnet, bool additive_boot);
      bool set_genesis_block(const block& b);
      bool deinit();
      uint64_t get_current_blockchain_height();
@@ -166,6 +166,7 @@ namespace cryptonote
      std::string m_checkpoints_path;
      time_t m_last_dns_checkpoints_update;
      time_t m_last_json_checkpoints_update;
+     bool m_additive_boot = false;
    };
 }
 

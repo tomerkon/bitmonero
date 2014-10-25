@@ -81,51 +81,59 @@ uint64_t blockchain_storage::get_current_blockchain_height()
   return m_blocks.size();
 }
 //------------------------------------------------------------------
-bool blockchain_storage::init(const std::string& config_folder, bool testnet)
+bool blockchain_storage::init(const std::string& config_folder, bool testnet, bool additive_boot)
 {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
   m_config_folder = config_folder;
-  const std::string rawfilename = m_config_folder + "/" + CRYPTONOTE_BLOCKCHAINDATA_RAW_FILENAME;
-  if (!bootfileloader::load_from_raw_file(this, &m_tx_pool, rawfilename)) {
-    LOG_PRINT_L0("Loading blockchain...");
-    const std::string filename = m_config_folder + "/" + CRYPTONOTE_BLOCKCHAINDATA_FILENAME;
-    if(tools::unserialize_obj_from_file(*this, filename))
+  bool data_loaded_ok = false;
+
+  LOG_PRINT_L0("Loading blockchain...");
+  const std::string filename = m_config_folder + "/" + CRYPTONOTE_BLOCKCHAINDATA_FILENAME;
+  data_loaded_ok = tools::unserialize_obj_from_file(*this, filename);
+
+  if (!data_loaded_ok || additive_boot)
+  {
+    // try load from raw file
+    LOG_PRINT_L0("blockchain serialization file not found, trying boot data...");
+    const std::string rawfilename = m_config_folder + "/" + CRYPTONOTE_BLOCKCHAINDATA_RAW_FILENAME;
+    data_loaded_ok = bootfileloader::load_from_raw_file(this, &m_tx_pool, rawfilename);
+  }
+
+  if(data_loaded_ok)
+  {
+    // checkpoints
+
+    // mainchain
+    for (size_t height=0; height < m_blocks.size(); ++height)
     {
+      CHECK_AND_ASSERT_MES((!m_checkpoints.is_in_checkpoint_zone(height)) || m_checkpoints.check_block(height,get_block_hash(m_blocks[height].bl)),false,"checkpoint fail, blockchain.bin invalid");
+    }
 
-      // checkpoints
-      
-      // mainchain
-      for (size_t height=0; height < m_blocks.size(); ++height) 
-      {
-	CHECK_AND_ASSERT_MES((!m_checkpoints.is_in_checkpoint_zone(height)) || m_checkpoints.check_block(height,get_block_hash(m_blocks[height].bl)),false,"checkpoint fail, blockchain.bin invalid");
-      }
-
-      // check alt chains
-      #if 0
-      // doesn't work when a checkpoint is added and there are already alt chains. However, the rest of the blockchain code suffers from the same issue, so ignore for now
-      // see issue #118
-      BOOST_FOREACH(blocks_ext_by_hash::value_type& alt_block, m_alternative_chains)
-      {
-	CHECK_AND_ASSERT_MES(m_checkpoints.is_alternative_block_allowed(m_blocks.size()-1,alt_block.second.height),false,"stored alternative block not allowed, blockchain.bin invalid");
-      }
-      #endif
+    // check alt chains
+    #if 0
+    // doesn't work when a checkpoint is added and there are already alt chains. However, the rest of the blockchain code suffers from the same issue, so ignore for now
+    // see issue #118
+    BOOST_FOREACH(blocks_ext_by_hash::value_type& alt_block, m_alternative_chains)
+    {
+      CHECK_AND_ASSERT_MES(m_checkpoints.is_alternative_block_allowed(m_blocks.size()-1,alt_block.second.height),false,"stored alternative block not allowed, blockchain.bin invalid");
+    }
+    #endif
+  }
+  else
+  {
+    LOG_PRINT_L0("Can't load blockchain storage from file, generating genesis block.");
+    block bl = boost::value_initialized<block>();
+    block_verification_context bvc = boost::value_initialized<block_verification_context>();
+    if (testnet)
+    {
+      generate_genesis_block(bl, config::testnet::GENESIS_TX, config::testnet::GENESIS_NONCE);
     }
     else
     {
-      LOG_PRINT_L0("Can't load blockchain storage from file, generating genesis block.");
-      block bl = boost::value_initialized<block>();
-      block_verification_context bvc = boost::value_initialized<block_verification_context>();
-      if (testnet)
-      {
-        generate_genesis_block(bl, config::testnet::GENESIS_TX, config::testnet::GENESIS_NONCE);
-      }
-      else
-      {
-        generate_genesis_block(bl, config::GENESIS_TX, config::GENESIS_NONCE);
-      }
-      add_new_block(bl, bvc);
-      CHECK_AND_ASSERT_MES(!bvc.m_verifivation_failed && bvc.m_added_to_main_chain, false, "Failed to add genesis block to blockchain");
+      generate_genesis_block(bl, config::GENESIS_TX, config::GENESIS_NONCE);
     }
+    add_new_block(bl, bvc);
+    CHECK_AND_ASSERT_MES(!bvc.m_verifivation_failed && bvc.m_added_to_main_chain, false, "Failed to add genesis block to blockchain");
   }
   if(!m_blocks.size())
   {
@@ -269,7 +277,7 @@ bool blockchain_storage::purge_transaction_keyimages_from_blockchain(const trans
         m_spent_keys.erase(r);
       }else
       {
-        CHECK_AND_ASSERT_MES(!m_strict_check, false, "purge_block_data_from_blockchain: key image in transaction not found");
+        CHECK_AND_ASSERT_MES(!m_strict_check, false, "purge_block_data_from_blockchain: key image in transaction not found, key=" << inp.k_image);
       }
       return true;
     }
@@ -1224,7 +1232,7 @@ bool blockchain_storage::find_blockchain_supplement(const uint64_t req_start_blo
 {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
   if(req_start_block > 0) {
-     start_height = req_start_block; 
+     start_height = req_start_block;
   } else {
     if(!find_blockchain_supplement(qblock_ids, start_height))
       return false;

@@ -82,7 +82,7 @@ namespace cryptonote
     {};
 
     bool init() { return init(tools::get_default_data_dir(), true); }
-    bool init(const std::string& config_folder, bool testnet = false);
+    bool init(const std::string& config_folder, bool testnet = false, bool additive_boot = false);
     bool deinit();
 
     void set_checkpoints(checkpoints&& chk_pts) { m_checkpoints = chk_pts; }

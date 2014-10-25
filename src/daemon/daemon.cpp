@@ -70,6 +70,7 @@ namespace
     , false
     };
   const command_line::arg_descriptor<bool>        arg_dns_checkpoints  = {"enforce-dns-checkpointing", "checkpoints from DNS server will be enforced", false};
+  const command_line::arg_descriptor<bool>        arg_additive_boot  = {"additive_boot", "load boot data on top of serialized data"};
 }
 
 bool command_line_preprocessor(const boost::program_options::variables_map& vm)
@@ -137,6 +138,7 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_cmd_sett, arg_console);
   command_line::add_arg(desc_cmd_sett, arg_testnet_on);
   command_line::add_arg(desc_cmd_sett, arg_dns_checkpoints);
+  command_line::add_arg(desc_cmd_only, command_line::arg_additive_boot);
 
   cryptonote::core::init_options(desc_cmd_sett);
   cryptonote::core_rpc_server::init_options(desc_cmd_sett);
@@ -249,9 +251,11 @@ int main(int argc, char* argv[])
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize core RPC server.");
   LOG_PRINT_GREEN("Core RPC server initialized OK on port: " << rpc_server.get_binded_port(), LOG_LEVEL_0);
 
+  bool additive_boot = command_line::get_arg(vm, arg_additive_boot);
+
   //initialize core here
   LOG_PRINT_L0("Initializing core...");
-  res = ccore.init(vm, testnet_mode);
+  res = ccore.init(vm, testnet_mode, additive_boot);
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize core");
   LOG_PRINT_L0("Core initialized OK");
   
